@@ -150,30 +150,22 @@ class LabelerWindow(QMainWindow):
             # initiate image visor
             cv2.namedWindow("Image", cv2.WINDOW_NORMAL)            
             # process first image
-            self.processImage()
+            self.listWidget.setCurrentRow(0)
             
             
     def onNextImage(self, s):
-        # self.processLabels()
+        if self.current +1 < len(self.dataset):
+            self.listWidget.setCurrentRow(self.current +1)        
         
-        if self.current < len(self.dataset):
-            self.listWidget.setCurrentRow(self.current +1)
-            # self.current += 1
-        # self.processImage()
-        
-        
-    def onPrevImage(self, s): 
-        # self.processLabels()
-        
+    def onPrevImage(self, s):        
         if self.current >= 1:
             self.listWidget.setCurrentRow(self.current -1)
-            # self.current -= 1
-        # self.processImage()
     
     def onSelectImage(self):
-        self.processLabels()
-        # update labels
-        self.updateItem()
+        if self.current > -1:
+            self.processLabels()
+            # update labels
+            self.updateItem()
         self.current = self.listWidget.currentRow()
         self.processImage()
         self.onSave(None)
@@ -228,7 +220,7 @@ class LabelerWindow(QMainWindow):
             
     def updateImageInfo(self):
         self.imagesInfo.setText(
-                "Image Nro. {} of {}".format(self.current,
+                "Image Nro. {} of {}".format(self.current +1,
                                              len(self.dataset))
                 )
         
@@ -289,16 +281,13 @@ class LabelerWindow(QMainWindow):
     def reset(self):
         self.csv_path = None
         self.filename = None
-        self.current = 0
+        self.current = -1
         self.labels = []
         self.csv_path = None
         self.dataset = None
         self.base_path = None
         self.imagesInfo.setText("Images")
         cv2.destroyAllWindows()
-        
-        self.processLabels
-        
         
 
 def main():
