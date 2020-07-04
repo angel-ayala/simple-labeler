@@ -1,1 +1,3 @@
-.spyproject
+# editors and cache folders
+/.spyproject
+**/__pycache__
