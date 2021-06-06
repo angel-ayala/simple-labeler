@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import QWidget
 from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtWidgets import QFileDialog
 from PyQt5.QtWidgets import QListWidget
+from PyQt5.QtWidgets import QShortcut
 
 from handlers import DataHandler
 from dialogs import CsvNameDialog
@@ -43,9 +44,15 @@ class LabelerWindow(QMainWindow):
         
         # labels
         self.labels = []
-        self.labels_id = ['none', 'fire', 'smoke']
-        self.labels_name = ['None', 'Fire', 'Smoke']
-        self.labels_default = 0 #none
+        self.labels_id = ['bom', 'maisoumenos', 'ruim',
+                          'empty-hand', 'falso', 'not-sure', 'cropped-gun',
+                          'handgun', 'rifle', 'shotgun', 
+                          'smartphone', 'wallet', 'card', 'money']
+        self.labels_name = ['Bom', '+ ou -', 'Ruim',
+                            'Empty Hand', 'Falso', 'Not sure', 'Cropped Gun',
+                            'Handgun', 'Rifle', 'Shotgun', 
+                            'Smartphone', 'Wallet', 'Card', 'Money']
+        self.labels_default = [1, 4] #none
         
         self.setWindowTitle("Simple Labeler")        
         # self.setApplicationDisplayName('Simple Labeler')
@@ -71,6 +78,7 @@ class LabelerWindow(QMainWindow):
         self.embedList()
         
         self.embedButtons()
+        self.embedShortcuts()
         
     @property
     def haveLabels(self):
@@ -110,8 +118,7 @@ class LabelerWindow(QMainWindow):
         layout.addWidget(next_button)
         
         self.mainLayout.addLayout(layout)
-        
-        
+
     def embedToolBar(self):
         toolbar = QToolBar("Main Toolbar", self)
         self.addToolBar(toolbar)
@@ -130,6 +137,14 @@ class LabelerWindow(QMainWindow):
         
         toolbar.addSeparator()
         
+        # stats
+        button_action = QAction(QIcon("assets/information-frame.png"), "Show labels information", self)
+        button_action.setStatusTip("Show labeled statistics")
+        button_action.triggered.connect(self.onShowStats)
+        toolbar.addAction(button_action)
+        
+        toolbar.addSeparator()
+        
         # write
         button_action = QAction(QIcon("assets/disk.png"), "Save CSV File", self)
         button_action.setStatusTip("Write changes to dataset CSV file")
@@ -142,19 +157,81 @@ class LabelerWindow(QMainWindow):
         
         
     def embedCheckBox(self):
-        layout = QVBoxLayout()
+        col_len = len(self.labels_name) // 2
+        layout = QHBoxLayout()
+        layoutv = QVBoxLayout()
         self.checkboxes = []
         
         for label, c in enumerate(self.labels_name):
+            if (label % col_len == 0 and label > 0):
+                layout.addLayout(layoutv)
+                layoutv = QVBoxLayout()
+                
             checkbox = QCheckBox(c, self.mainWidget)
             checkbox.setChecked(label in self.labels)
             # checkbox.stateChanged.connect(self.onCheckboxChange)
             self.checkboxes.append(checkbox)
-            layout.addWidget(checkbox)
+            layoutv.addWidget(checkbox)
+        layout.addLayout(layoutv)
         
         self.mainLayout.addLayout(layout)
+
+    def embedShortcuts(self):
+        shortcuts = [("Q", self.labelBomCropped),
+                    ("W", self.labelBomHandgun),
+                    ("E", self.labelBomEmpty),
+                    ("F", self.label2Falso),
+                    ("R", self.label2Ruim),
+                    ("V", self.label2SoSo),
+                    ("H", self.labelRepeat),
+                    ("B", self.labelUnset)]
+
+        for sh_key, sh_fn in shortcuts:
+            sh = QShortcut(sh_key, self.mainWidget)
+            sh.activated.connect(sh_fn)
+            sh.activated.connect(self.refreshCheckboxes)
+            sh.activated.connect(self.setLastLabel)
+
+    def setLastLabel(self):
+        self.labels_default = self.labels
+
+    def labelRepeat(self):
+        self.labels = self.labels_default
+
+    def labelUnset(self):
+        self.labels = []
+
+    def labelResetSGM(self):
+        for lbl in [0, 1, 2]:
+            try:
+                del self.labels[self.labels.index(lbl)]
+            except ValueError as e:
+                pass
         
-    def onImportCsv(self, s):        
+    def labelBomCropped(self):
+        self.labels = [0, 6]
+        # self.processLabels()
+
+    def labelBomHandgun(self):
+        self.labels = [0, 7]
+        # self.processLabels()
+
+    def labelBomEmpty(self):
+        self.labels = [0, 3]
+        # self.processLabels()
+    
+    def label2Falso(self):
+        self.labels = [1, 4]
+
+    def label2Ruim(self):
+        self.labelResetSGM()
+        self.labels.append(2)
+
+    def label2SoSo(self):
+        self.labelResetSGM()
+        self.labels.append(1)
+
+    def onImportCsv(self, s):
         dialog = QFileDialog.getOpenFileName(self, 'Open file', '',
                                                     "CSV files (*.csv)")
         
@@ -208,7 +285,17 @@ class LabelerWindow(QMainWindow):
             self.startLabeling()
         else:
             self.data = None
-            
+
+    def onShowStats(self):
+        stats = self.data.get_stats()
+        stats_str = ""
+        for key, val in stats:
+            key = '_'.join(key) if type(key) is list else key
+            stats_str += f"{key} = {val}\n"
+
+        dlg = MessageDialog('Label stats', stats_str)
+        dlg.exec_()
+
     def onSaveCsv(self, button):
         self.changesSaved = True
         self.data.save()
@@ -317,18 +404,21 @@ class LabelerWindow(QMainWindow):
             item.setText(itemText)       
     
     def refreshCheckboxes(self):
-        if self.haveLabels:
-            for label, checkbox in enumerate(self.checkboxes):
-                if label in self.labels:
-                    checkbox.setChecked(True)
-                else:
-                    checkbox.setChecked(False)
+#        if self.haveLabels:
+        for label, checkbox in enumerate(self.checkboxes):
+            if label in self.labels:
+                checkbox.setChecked(True)
+            else:
+                checkbox.setChecked(False)
                     
     def getValidLabels(self):
         self.labels = [i for i, c in enumerate(self.checkboxes) if c.isChecked()]
         
-        if not self.haveLabels:
-            self.labels.append(self.labels_default)
+        # if not self.haveLabels:
+            # if type(self.labels_default) is list:
+                # self.labels.extend(self.labels_default)
+            # else:
+                # self.labels.append(self.labels_default)
         
         return self.labels
     
@@ -344,7 +434,8 @@ class LabelerWindow(QMainWindow):
             out_labels = self.labels_id[self.labels[0]]
         
         # self.dataset.iloc[self.current]['class'] = out_labels
-        self.data[self.current] = out_labels
+        self.data[self.current] = out_labels if len(out_labels) > 0 else \
+            'unset'
             
     def updateImageInfo(self):
         image_summ = "Image Nro. {} of {}".format(self.current +1, 
